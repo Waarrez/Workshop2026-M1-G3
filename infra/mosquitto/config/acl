@@ -1,0 +1,7 @@
+user esp8266
+topic write sentinel/sensors/#
+topic read sentinel/commands/#
+
+user backend
+topic readwrite sentinel/#
+topic read $SYS/#

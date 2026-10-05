@@ -1,0 +1,59 @@
+name: sentinel
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "8883:8883"
+    environment:
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD}
+    command:
+      - sh
+      - -c
+      - mkdir -p /mosquitto/certs && cp /src/config/* /mosquitto/config/ && cp /src/certs/ca.crt /src/certs/server.crt /src/certs/server.key /mosquitto/certs/ && chown mosquitto:mosquitto /mosquitto/config/* /mosquitto/certs/* && chmod 0600 /mosquitto/config/passwd /mosquitto/config/acl /mosquitto/certs/server.key && exec mosquitto -c /mosquitto/config/mosquitto.conf
+    volumes:
+      - ./mosquitto/config:/src/config:ro
+      - ./mosquitto/certs:/src/certs:ro
+      - mosquitto_data:/mosquitto/data
+    networks: [mqtt]
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt --insecure -u backend -P $$MQTT_BACKEND_PASSWORD -t '$$SYS/broker/uptime' -C 1 -W 3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+networks:
+  mqtt:
+    ipam:
+      config: [{ subnet: 172.28.1.0/24 }]
+  db:
+    internal: true
+    ipam:
+      config: [{ subnet: 172.28.2.0/24 }]
+
+volumes:
+  mosquitto_data:
+  db_data:
