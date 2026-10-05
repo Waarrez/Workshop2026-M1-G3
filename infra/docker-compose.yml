@@ -26,6 +26,20 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  api:
+    build: ../api
+    container_name: api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../api/:/api   # rechargement à chaud en dev
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped
