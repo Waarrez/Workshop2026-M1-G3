@@ -2,3 +2,4 @@
 mosquitto/certs/*.key
 mosquitto/certs/*.srl
 mosquitto/config/passwd
+__pycache__/
