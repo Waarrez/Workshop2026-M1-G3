@@ -1,7 +1,3 @@
-from fastapi import FastAPI
+from factory import get_fastapi
 
-app = FastAPI()
-
-@app.get("/")
-def health_check():
-    return {"status": "ok"}
+app = get_fastapi()
