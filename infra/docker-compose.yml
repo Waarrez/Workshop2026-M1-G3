@@ -33,7 +33,9 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
-      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD}
+      MQTT_HOST: mosquitto
+      MQTT_USER: backend
+      MQTT_PASSWORD: ${MQTT_BACKEND_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
