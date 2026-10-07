@@ -15,7 +15,7 @@ async def ingest(data: dict):
     print(f"[MQTT] message reçu : {data}")
     try:
         reading = ReadingIn(**data)
-    except ValidationError:
+    except ValidationError as e:
         print(f"[MQTT] message rejeté : {e}")
         return
     row = normalize(reading)
@@ -28,8 +28,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
 hub = Hub()
-
-# STOCKAGE MEMOIRE
 
 READINGS: deque = deque(maxlen=5000)
 EVENTS: deque = deque(maxlen=1000)
@@ -94,24 +92,12 @@ async def list_devices():
         out.append({"id": dev_id, "last_seen": last, "online": age < ONLINE_TIMEOUT_S})
     return out
 
-
-# ---------- Commandes (buzzer, LED) ----------
-@app.post("/api/commands", status_code=201)
-async def send_command(cmd: CommandIn):
-    entry = {"cmd_id": next(CMD_IDS), "created_at": now_iso(), **cmd.model_dump()}
-    PENDING_CMDS[cmd.device_id].append(entry)
-    # TODO MQTT : publier aussi sur  sentinel/<device_id>/cmd
-    await hub.broadcast({"type": "command", "payload": entry})
-    return entry
-
-
 @app.get("/api/commands/{device_id}/pending")  # pour un ESP qui interroge en HTTP
 async def pop_pending(device_id: str):
     queue = PENDING_CMDS[device_id]
     out = list(queue)
     queue.clear()
     return out
-
 
 # ---------- Événements (vision, alertes) ----------
 @app.post("/api/events", status_code=201)
