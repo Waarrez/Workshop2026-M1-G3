@@ -3,51 +3,157 @@ import CameraFeed from './components/CameraFeed';
 import EnvironmentChart from './components/EnvironmentChart';
 import Header from './components/Header';
 import SystemStatus from './components/SystemStatus';
+import type {
+    Device,
+    Event,
+    Reading,
+    WebSocketMessage,
+} from './types';
 import './index.css';
+
+const WS_URL = `ws://${window.location.hostname}:8000/ws`;
 
 function App() {
     const [isLightTheme, setIsLightTheme] = useState(() => {
         return localStorage.getItem('sentinel-theme') === 'light';
-    }
-);
+    });
 
-useEffect(() => {
-    document.documentElement.dataset.theme = isLightTheme ? 'light' : 'dark';
-    localStorage.setItem('sentinel-theme', isLightTheme ? 'light' : 'dark');
-}, [isLightTheme]);
+    const [readings, setReadings] = useState<Reading[]>([]);
+    const [devices, setDevices] = useState<Device[]>([]);
+    const [events, setEvents] = useState<Event[]>([]);
 
-return (
-    <div className="app">
-        <Header
-            isLightTheme={isLightTheme}
-            onToggleTheme={() => setIsLightTheme((current) => !current)}
-        />
+    useEffect(() => {
+        document.documentElement.dataset.theme = isLightTheme ? 'light' : 'dark';
+        localStorage.setItem('sentinel-theme', isLightTheme ? 'light' : 'dark');
+    }, [isLightTheme]);
 
-        <main className="dashboard">
-            <section className="dashboard-section">
-                <div className="section-title">
-                    <h2>Supervision</h2>
-                    <span className="live-indicator">LIVE</span>
-                </div>
+    useEffect(() => {
+        let websocket: WebSocket | null = null;
+        let reconnectTimeout: number | undefined;
+        let cancelled = false;
 
-                <SystemStatus />
-            </section>
+        const connectWebSocket = () => {
+            if (cancelled) {
+                return;
+            }
 
-            <section className="dashboard-grid">
-                <div className="panel camera-panel">
-                    <h2>Surveillance vidéo</h2>
-                    <CameraFeed />
-                </div>
+            websocket = new WebSocket(WS_URL);
 
-                <div className="panel environment-panel">
-                    <h2>Données environnementales</h2>
-                    <EnvironmentChart />
-                </div>
-            </section>
-        </main>
-    </div>
-);
+            websocket.onopen = () => {
+                console.info('WebSocket connecté.');
+            };
 
+            websocket.onmessage = (message) => {
+                try {
+                    const data = JSON.parse(message.data) as WebSocketMessage;
+
+                    if (data.type === 'reading') {
+                        const reading = data.payload as Reading;
+
+                        setReadings((current) => [...current, reading].slice(-100));
+
+                        setDevices((current) => {
+                            const existingDevice = current.find((device) => device.id === reading.id);
+
+                            if (!existingDevice) {
+                                return [
+                                    ...current,
+                                    {
+                                        id: reading.id,
+                                        last_seen: reading.received_at,
+                                        online: true,
+                                    },
+                                ];
+                            }
+
+                            return current.map((device) =>
+                                device.id === reading.id
+                                    ? {
+                                          ...device,
+                                          last_seen:
+                                              reading.received_at,
+                                          online: true,
+                                      }
+                                    : device,
+                            );
+                        });
+                    }
+
+                    if (data.type === 'event') {
+                        const event = data.payload as Event;
+
+                        setEvents((current) => [...current, event].slice(-100));
+                    }
+                } catch (error) {
+                    console.error('Message WebSocket invalide :', error);
+                }
+            };
+
+            websocket.onerror = () => {
+                console.error('Erreur WebSocket.');
+            };
+
+            websocket.onclose = () => {
+                if (cancelled) {
+                    return;
+                }
+
+                console.info('WebSocket déconnecté. Nouvelle tentative dans 3 secondes.');
+
+                reconnectTimeout = window.setTimeout(connectWebSocket, 3000);
+            };
+        };
+
+        connectWebSocket();
+
+        return () => {
+            cancelled = true;
+
+            if (reconnectTimeout !== undefined) {
+                window.clearTimeout(reconnectTimeout);
+            }
+
+            websocket?.close();
+        };
+    }, []);
+
+    return (
+        <div className="app">
+            <Header
+                isLightTheme={isLightTheme}
+                onToggleTheme={() =>
+                    setIsLightTheme((current) => !current)
+                }
+            />
+
+            <main className="dashboard">
+                <section className="dashboard-section">
+                    <div className="section-title">
+                        <h2>Supervision</h2>
+                        <span className="live-indicator">LIVE</span>
+                    </div>
+
+                    <SystemStatus
+                        devices={devices}
+                        readings={readings}
+                        events={events}
+                    />
+                </section>
+
+                <section className="dashboard-grid">
+                    <div className="panel camera-panel">
+                        <h2>Surveillance vidéo</h2>
+                        <CameraFeed />
+                    </div>
+
+                    <div className="panel environment-panel">
+                        <h2>Données environnementales</h2>
+                        <EnvironmentChart readings={readings} />
+                    </div>
+                </section>
+            </main>
+        </div>
+    );
 }
 
 export default App;

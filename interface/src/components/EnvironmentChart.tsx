@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
     CartesianGrid,
     Line,
@@ -7,35 +8,133 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+import type { Reading } from '../types';
 
-const data = [
-    { time: '10:00', temperature: 23.8 },
-    { time: '10:05', temperature: 24.1 },
-    { time: '10:10', temperature: 24.3 },
-    { time: '10:15', temperature: 24.7 },
-    { time: '10:20', temperature: 24.5 },
-    { time: '10:25', temperature: 24.9 },
-    { time: '10:30', temperature: 25.1 },
-];
+interface EnvironmentChartProps {
+    readings: Reading[];
+}
 
-function EnvironmentChart() {
+type Metric = 'temperature' | 'humidity' | 'gas';
+
+const metrics = {
+    temperature: {
+        label: 'Température',
+        unit: '°C',
+        color: '#ef4444',
+        dataKey: 'temperature',
+    },
+    humidity: {
+        label: 'Humidité',
+        unit: '%',
+        color: '#3b82f6',
+        dataKey: 'humidity',
+    },
+    gas: {
+        label: 'Gaz',
+        unit: '',
+        color: '#f59e0b',
+        dataKey: 'gas',
+    },
+} as const;
+
+function EnvironmentChart({
+    readings,
+}: EnvironmentChartProps) {
+    const [selectedMetric, setSelectedMetric] =
+        useState<Metric>('temperature');
+
+    const metric = metrics[selectedMetric];
+
+    const chartData = readings
+        .filter((reading) => {
+            if (selectedMetric === 'temperature') {
+                return reading.temp_c !== null;
+            }
+
+            if (selectedMetric === 'humidity') {
+                return reading.humidity_pct !== null;
+            }
+
+            return reading.gas_raw !== null;
+        })
+        .slice(-30)
+        .map((reading) => ({
+            time: new Date(reading.received_at).toLocaleTimeString(
+                'fr-FR',
+                {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                },
+            ),
+            temperature: reading.temp_c,
+            humidity: reading.humidity_pct,
+            gas: reading.gas_raw,
+        }));
+
+    const latestReading = readings.at(-1);
+
+    const currentValue =
+        selectedMetric === 'temperature'
+            ? latestReading?.temp_c
+            : selectedMetric === 'humidity'
+              ? latestReading?.humidity_pct
+              : latestReading?.gas_raw;
+
     return (
         <div className="environment-content">
-            <div className="environment-value">
-                <span>Température</span>
-                <strong>25.1 °C</strong>
+            <div className="environment-header">
+                <div className="environment-value">
+                    <span>{metric.label}</span>
+                    <strong>
+                        {currentValue != null
+                            ? `${typeof currentValue === 'number' && selectedMetric !== 'gas'
+                                ? currentValue.toFixed(1)
+                                : currentValue}${metric.unit ? ` ${metric.unit}` : ''}`
+                            : '--'}
+                    </strong>
+                </div>
+
+                <div className="environment-tabs">
+                    {(Object.keys(metrics) as Metric[]).map(
+                        (metricKey) => (
+                            <button
+                                key={metricKey}
+                                type="button"
+                                className={
+                                    selectedMetric === metricKey
+                                        ? 'environment-tab active'
+                                        : 'environment-tab'
+                                }
+                                onClick={() =>
+                                    setSelectedMetric(metricKey)
+                                }
+                            >
+                                {metrics[metricKey].label}
+                            </button>
+                        ),
+                    )}
+                </div>
             </div>
 
             <div className="chart">
                 <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={data}>
+                    <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="time" />
-                        <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
-                        <Tooltip />
+                        <YAxis />
+                        <Tooltip
+                            formatter={(value) => [
+                                value,
+                                metric.label,
+                            ]}
+                        />
+
                         <Line
                             type="monotone"
-                            dataKey="temperature"
+                            dataKey={metric.dataKey}
+                            name={metric.label}
+                            stroke={metric.color}
                             strokeWidth={2}
                             dot={false}
                         />
