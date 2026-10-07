@@ -4,6 +4,51 @@
     background: #090d14;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
+
+
+    --background: #090d14;
+    --background-secondary: #0e141e;
+    --background-header: rgba(9, 13, 20, 0.9);
+    --background-camera: #080c12;
+    --background-grid: rgba(255, 255, 255, 0.02);
+
+    --border: #202938;
+    --border-secondary: #252f3f;
+
+    --text: #e5e7eb;
+    --text-secondary: #7f8a9a;
+    --text-muted: #667386;
+
+    --success: #70db9a;
+    --success-bright: #42d782;
+    --success-border: #284b38;
+
+    --accent: #172033;
+}
+
+:root[data-theme='light'] {
+    color: #172033;
+    background: #f3f5f8;
+
+
+    --background: #f3f5f8;
+    --background-secondary: #ffffff;
+    --background-header: rgba(255, 255, 255, 0.92);
+    --background-camera: #e9edf2;
+    --background-grid: rgba(23, 32, 51, 0.05);
+
+    --border: #d9dee7;
+    --border-secondary: #cbd2dc;
+
+    --text: #172033;
+    --text-secondary: #687386;
+    --text-muted: #7f8a9a;
+
+    --success: #238653;
+    --success-bright: #2eae6c;
+    --success-border: #b8dfca;
+
+    --accent: #e5eaf1;
 }
 
 * {
@@ -23,9 +68,13 @@ input {
 
 .app {
     min-height: 100vh;
+    color: var(--text);
     background:
-        radial-gradient(circle at top right, #172033 0, transparent 35%),
-        #090d14;
+        radial-gradient(circle at top right, var(--accent) 0, transparent 35%),
+        var(--background);
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
 }
 
 .header {
@@ -33,8 +82,8 @@ input {
     align-items: center;
     justify-content: space-between;
     padding: 24px 40px;
-    border-bottom: 1px solid #202938;
-    background: rgba(9, 13, 20, 0.9);
+    border-bottom: 1px solid var(--border);
+    background: var(--background-header);
 }
 
 .header h1 {
@@ -45,7 +94,7 @@ input {
 
 .header p {
     margin: 4px 0 0;
-    color: #7f8a9a;
+    color: var(--text-secondary);
     font-size: 13px;
 }
 
@@ -53,7 +102,7 @@ input {
     display: flex;
     align-items: center;
     gap: 10px;
-    color: #8ee6b1;
+    color: var(--success);
     font-size: 12px;
     font-weight: 600;
 }
@@ -62,8 +111,31 @@ input {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #42d782;
-    box-shadow: 0 0 10px #42d782;
+    background: var(--success-bright);
+    box-shadow: 0 0 10px var(--success-bright);
+}
+
+.theme-toggle {
+    position: fixed;
+    top: 88px;
+    right: 40px;
+    z-index: 10;
+    padding: 7px 11px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.theme-toggle:hover {
+    border-color: var(--success-border);
+    color: var(--text);
 }
 
 .dashboard {
@@ -93,9 +165,9 @@ input {
 
 .live-indicator {
     padding: 3px 7px;
-    border: 1px solid #284b38;
+    border: 1px solid var(--success-border);
     border-radius: 4px;
-    color: #70db9a;
+    color: var(--success);
     font-size: 10px;
 }
 
@@ -107,9 +179,9 @@ input {
 
 .status-card,
 .panel {
-    border: 1px solid #202938;
+    border: 1px solid var(--border);
     border-radius: 8px;
-    background: #0e141e;
+    background: var(--background-secondary);
 }
 
 .status-card {
@@ -120,7 +192,7 @@ input {
 }
 
 .status-label {
-    color: #7f8a9a;
+    color: var(--text-secondary);
     font-size: 12px;
 }
 
@@ -129,7 +201,7 @@ input {
 }
 
 .status-ok {
-    color: #70db9a;
+    color: var(--success);
     font-size: 11px;
 }
 
@@ -148,12 +220,12 @@ input {
     height: 360px;
     margin-top: 16px;
     overflow: hidden;
-    border: 1px solid #252f3f;
+    border: 1px solid var(--border-secondary);
     border-radius: 6px;
     background:
-        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-        #080c12;
+        linear-gradient(var(--background-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--background-grid) 1px, transparent 1px),
+        var(--background-camera);
     background-size: 25px 25px;
 }
 
@@ -165,7 +237,7 @@ input {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    color: #667386;
+    color: var(--text-muted);
 }
 
 .camera-icon {
@@ -190,8 +262,8 @@ input {
     gap: 8px;
     padding: 7px 10px;
     border-radius: 4px;
-    background: rgba(5, 8, 12, 0.8);
-    color: #70db9a;
+    background: var(--background-header);
+    color: var(--success);
     font-size: 10px;
 }
 
@@ -207,7 +279,7 @@ input {
 }
 
 .environment-value span {
-    color: #7f8a9a;
+    color: var(--text-secondary);
     font-size: 12px;
 }
 
@@ -223,6 +295,11 @@ input {
 @media (max-width: 900px) {
     .header {
         padding: 20px;
+    }
+
+    .theme-toggle {
+        top: 76px;
+        right: 20px;
     }
 
     .dashboard {
@@ -243,6 +320,12 @@ input {
         align-items: flex-start;
         flex-direction: column;
         gap: 16px;
+    }
+
+    .theme-toggle {
+        position: absolute;
+        top: 20px;
+        right: 20px;
     }
 
     .status-grid {
