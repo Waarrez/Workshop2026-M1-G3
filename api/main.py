@@ -7,14 +7,25 @@ from models.models import ReadingIn, CommandIn, EventIn
 from hub import Hub
 from fastapi import Query, WebSocket, WebSocketDisconnect
 from typing import Optional
+from pydantic import ValidationError
+from fastapi import HTTPException
+import mqtt_bridge
 
-app = get_fastapi()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+async def ingest(data: dict):
+    print(f"[MQTT] message reçu : {data}")
+    try:
+        reading = ReadingIn(**data)
+    except ValidationError:
+        print(f"[MQTT] message rejeté : {e}")
+        return
+    row = normalize(reading)
+    READINGS.append(row)
+    DEVICES[row["id"]] = row["received_at"]
+    await hub.broadcast({"type": "reading", "payload": row})
+
+app = get_fastapi(on_reading=ingest)
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_methods=["*"], allow_headers=["*"])
 
 hub = Hub()
 
@@ -41,15 +52,21 @@ def normalize(r: ReadingIn) -> dict:
     row["received_at"] = now_iso()
     return row
 
-
 @app.post("/data", status_code=201)  # route utilisée par l'ESP8266
 @app.post("/api/readings", status_code=201)
 async def post_reading(reading: ReadingIn):
-    row = normalize(reading)
-    READINGS.append(row)
-    DEVICES[row["id"]] = row["received_at"]
-    await hub.broadcast({"type": "reading", "payload": row})
+    await ingest(reading.model_dump())
     return {"status": "ok"}
+
+@app.post("/api/commands", status_code=201)
+async def send_command(cmd: CommandIn):
+    ok = mqtt_bridge.publish_command(cmd.device_id, {
+        "target": cmd.target, "state": cmd.state, "duration_ms": cmd.duration_ms})
+    if not ok:
+        raise HTTPException(503, "Broker MQTT indisponible")
+    entry = {"cmd_id": next(CMD_IDS), "created_at": now_iso(), **cmd.model_dump()}
+    await hub.broadcast({"type": "command", "payload": entry})
+    return entry
 
 
 @app.get("/api/readings")
