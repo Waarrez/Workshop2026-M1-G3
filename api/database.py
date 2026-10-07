@@ -19,3 +19,5 @@ def get_db():
         yield db
     finally:
         db.close()
+
+from models import db_models  # noqa: E402,F401
