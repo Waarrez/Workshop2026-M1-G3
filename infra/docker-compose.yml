@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "8883:8883"
+      - "127.0.0.1:9001:9001"
     environment:
       MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD}
     command:

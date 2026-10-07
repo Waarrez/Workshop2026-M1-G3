@@ -1,6 +1,12 @@
 user esp8266
 topic write sentinel/sensors/#
+topic write sentinel/status
+topic read sentinel/actuators/#
 topic read sentinel/commands/#
+
+user dashboard
+topic read sentinel/#
+topic write sentinel/actuators/#
 
 user backend
 topic readwrite sentinel/#
