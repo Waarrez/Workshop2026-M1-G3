@@ -1,3 +1,5 @@
+# Lien du github: https://github.com/Waarrez/Workshop2026-M1-G3
+
 # SENTINEL-X — Workshop EPSI M1 2026
 
 Ce dépôt contient les développements réalisés pour le projet **SENTINEL-X** dans le cadre du Workshop EPSI M1 2026, équipe G3.
