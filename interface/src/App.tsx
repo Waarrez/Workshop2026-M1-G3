@@ -11,7 +11,9 @@ import type {
 } from './types';
 import './index.css';
 
+const API_URL = `http://${window.location.hostname}:8000`;
 const WS_URL = `ws://${window.location.hostname}:8000/ws`;
+const MAX_READINGS = 30;
 
 function App() {
     const [isLightTheme, setIsLightTheme] = useState(() => {
@@ -26,6 +28,53 @@ function App() {
         document.documentElement.dataset.theme = isLightTheme ? 'light' : 'dark';
         localStorage.setItem('sentinel-theme', isLightTheme ? 'light' : 'dark');
     }, [isLightTheme]);
+
+    useEffect(() => {
+        const loadHistory = async () => {
+            try {
+                const response = await fetch(`${API_URL}/api/readings?limit=${MAX_READINGS}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const history = (await response.json()) as Reading[];
+
+                setReadings(history.slice(-MAX_READINGS));
+
+                setDevices(
+                    history.reduce<Device[]>((current, reading) => {
+                        const existingDevice = current.find((device) => device.id === reading.id);
+
+                        if (existingDevice) {
+                            return current.map((device) =>
+                                device.id === reading.id
+                                    ? {
+                                          ...device,
+                                          last_seen: reading.received_at,
+                                          online: true,
+                                      }
+                                    : device,
+                            );
+                        }
+
+                        return [
+                            ...current,
+                            {
+                                id: reading.id,
+                                last_seen: reading.received_at,
+                                online: true,
+                            },
+                        ];
+                    }, []),
+                );
+            } catch (error) {
+                console.error('Impossible de récupérer l’historique :', error);
+            }
+        };
+
+        loadHistory();
+    }, []);
 
     useEffect(() => {
         let websocket: WebSocket | null = null;
@@ -50,7 +99,7 @@ function App() {
                     if (data.type === 'reading') {
                         const reading = data.payload as Reading;
 
-                        setReadings((current) => [...current, reading].slice(-100));
+                        setReadings((current) => [...current, reading].slice(-MAX_READINGS));
 
                         setDevices((current) => {
                             const existingDevice = current.find((device) => device.id === reading.id);

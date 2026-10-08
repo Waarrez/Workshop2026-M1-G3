@@ -73,7 +73,7 @@ services:
     container_name: interface
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8081:80"
     networks: [default]
 
   grafana:
