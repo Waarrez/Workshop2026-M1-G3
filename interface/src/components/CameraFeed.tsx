@@ -1,11 +1,13 @@
+const CAMERA_URL = `http://${window.location.hostname}:8001/camera/stream`;
+
 function CameraFeed() {
     return (
         <div className="camera-feed">
-            <div className="camera-placeholder">
-                <div className="camera-icon">◉</div>
-                <span>WEBCAM USB</span>
-                <small>Flux vidéo en attente</small>
-            </div>
+            <img
+                src={CAMERA_URL}
+                className="camera-video"
+                alt="Flux vidéo de la webcam USB"
+            />
 
             <div className="camera-status">
                 <span className="status-dot" />
