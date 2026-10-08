@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Device, Event, Reading } from '../types';
 
 interface SystemStatusProps {
@@ -6,11 +7,15 @@ interface SystemStatusProps {
     events: Event[];
 }
 
+const API_URL = `http://${window.location.hostname}:8000`;
+
 function SystemStatus({
     devices,
     readings,
     events,
 }: SystemStatusProps) {
+    const [buzzerLoading, setBuzzerLoading] = useState(false);
+
     const onlineDevices = devices.filter(
         (device) => device.online,
     ).length;
@@ -25,6 +30,37 @@ function SystemStatus({
     ].filter((value) => value !== null && value !== undefined).length;
 
     const sensorTotal = 4;
+
+    const triggerBuzzer = async () => {
+        if (!latestReading || buzzerLoading) {
+            return;
+        }
+
+        setBuzzerLoading(true);
+
+        try {
+            const response = await fetch(`${API_URL}/api/commands`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    device_id: latestReading.id,
+                    target: 'buzzer',
+                    state: true,
+                    duration_ms: 3000,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Impossible de déclencher le buzzer :', error);
+        } finally {
+            setBuzzerLoading(false);
+        }
+    };
 
     return (
         <div className="status-grid">
@@ -50,6 +86,19 @@ function SystemStatus({
                 <span className="status-label">Alertes</span>
                 <strong>{events.length}</strong>
                 <span className={events.length === 0 ? 'status-ok' : 'status-warning'}>{events.length === 0 ? 'Aucune menace' : 'Événement(s) détecté(s)'}</span>
+            </div>
+
+            <div className="status-card">
+                <span className="status-label">Commande</span>
+                <strong>BUZZER</strong>
+                <button
+                    type="button"
+                    className="buzzer-button"
+                    onClick={triggerBuzzer}
+                    disabled={!latestReading || buzzerLoading}
+                >
+                    {buzzerLoading ? 'ENVOI...' : 'FAIRE SONNER'}
+                </button>
             </div>
         </div>
     );

@@ -16,24 +16,29 @@ app.add_middleware(
 )
 
 CAMERA_INDEX = 1
-FRAME_INTERVAL = 0.04
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+CAMERA_FPS = 25
+FRAME_INTERVAL = 1 / CAMERA_FPS
+RECONNECT_INTERVAL = 2
 
-camera = cv2.VideoCapture(CAMERA_INDEX)
-
-camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-camera.set(cv2.CAP_PROP_FPS, 25)
-
-camera_active = camera.isOpened()
-latest_frame = None
+camera_active = False
+latest_frame: bytes | None = None
 frame_lock = threading.Lock()
 
-print(f"Ouverture de la caméra {CAMERA_INDEX}...")
 
-if not camera_active:
-    raise RuntimeError(f"Impossible d'ouvrir la webcam avec l'index {CAMERA_INDEX}.")
+def open_camera():
+    camera = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
 
-print("Caméra ouverte avec succès.")
+    if not camera.isOpened():
+        camera.release()
+        return None
+
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+    camera.set(cv2.CAP_PROP_FPS, CAMERA_FPS)
+
+    return camera
 
 
 def capture_frames():
@@ -41,29 +46,41 @@ def capture_frames():
     global latest_frame
 
     while True:
-        success, frame = camera.read()
+        camera = open_camera()
 
-        if not success:
+        if camera is None:
             camera_active = False
-            time.sleep(1)
+
+            with frame_lock:
+                latest_frame = None
+
+            time.sleep(RECONNECT_INTERVAL)
             continue
 
-        success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-
-        if not success:
-            camera_active = False
-            continue
-
-        with frame_lock:
-            latest_frame = buffer.tobytes()
-
+        print("Caméra ouverte avec succès.")
         camera_active = True
 
-        time.sleep(FRAME_INTERVAL)
+        while True:
+            success, frame = camera.read()
 
+            if not success:
+                print("Caméra déconnectée.")
 
-capture_thread = threading.Thread(target=capture_frames, daemon=True)
-capture_thread.start()
+                camera_active = False
+
+                with frame_lock:
+                    latest_frame = None
+
+                camera.release()
+                break
+
+            success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+
+            if success:
+                with frame_lock:
+                    latest_frame = buffer.tobytes()
+
+            time.sleep(FRAME_INTERVAL)
 
 
 def generate_frames():
@@ -98,7 +115,7 @@ def camera_snapshot():
         frame = latest_frame
 
     if frame is None:
-        return Response(content=b"Impossible de capturer une image.", status_code=503)
+        return Response(content=b"Camera indisponible.", status_code=503)
 
     return Response(content=frame, media_type="image/jpeg")
 
@@ -110,3 +127,8 @@ def health():
         "camera": CAMERA_INDEX,
         "camera_open": camera_active,
     }
+
+
+capture_thread = threading.Thread(target=capture_frames, daemon=True)
+
+capture_thread.start()
