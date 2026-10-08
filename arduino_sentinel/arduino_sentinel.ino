@@ -8,48 +8,21 @@
 #include <Adafruit_SSD1306.h>
 #include <time.h>
 
-// ================= A MODIFIER =================
-const char* WIFI_SSID = "MATHIS"; // ← ton nom de Wi-Fi
-const char* WIFI_PASS = "U6xrQ3R5vcyBzu"; // ← ton mot de passe
-const char*    MQTT_HOST  = "192.168.137.1";   // IP du PC sur CE reseau (ipconfig)
+const char* WIFI_SSID = "";
+const char* WIFI_PASS = ""; 
+const char*    MQTT_HOST  = "192.168.137.1";
 const uint16_t MQTT_PORT  = 8883;
-const char*    MQTT_USER  = "esp8266";
-const char*    MQTT_PASS  = "Workshop";
+const char*    MQTT_USER  = "";
+const char*    MQTT_PASS  = "";
 const char*    DEVICE_ID  = "SX-001";
 const char*    NTP_SERVER = "pool.ntp.org";
 const char* mqtt_topic = "api/commands";
 
-#define USE_CA_CERT 0     // 0 = TLS sans verifier le certificat (tests) ; 1 = verifie (demo)
+#define USE_CA_CERT 0
 
 #if USE_CA_CERT
 static const char CA_CERT[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDF00NHpJND6zjn
-1MSd2MzzvNB+QqDXVbqBRW11+ROaOoOMrW7UfCuVj2G5d8SKBEBJOvGUxcztgeNQ
-/ZFj9dIm+e2wuXe4BgwfPhNdmneXZtFVPHtswoMoTRGk/Kb7npIQmVPwoeE1lfWQ
-BAQxxrHGDij8lKELT/lQklYCKaxKuVxJ9F9pyRjt7Ey8rlUlCp7rupOajpwHftUW
-yf1h3dYLI+Ax+merOlKjoseOGyHz7VbuHD/XAJ6GjWM1ZauHJuT74wwGplTc2+rv
-/IyChBA6zp3H4rjKTKV6Zdt8jv0jB1WS7E1RJzhbsLLO6DVNVQI0RSSIqXZno9kZ
-2kso/6IBAgMBAAECggEABNOdvZ6/VRXlIornbS5/+aZus9XuVLKrxUGrZQh5uPaa
-hREqNhb9fT2tVbgdXHy0ENVWVZnp4RWdNTmqlXTG9tp8OSadTCkhnJWIJW2CY3hH
-vTuni0THrHEM8CiV7me1CqCjEqjwdL0+64+dhpVhewKXb2o077C41YVsgcsAgCYw
-lyL16fAPmGT9DEIhUxLMZ5fUeX4q2FEEU8AxRI8VYFtinDhg9B+/HLLoAv5M/2jx
-CvUSQyHupIYTIRlXVz/zbzRccSpawUiKGkTJz/DCVv1iEMtGzb8P7/g4DavxNxS9
-/MmrbfPCMrrTrct9Q+nsdeLaeXHtTzwEKYSK13qSvQKBgQD5aEw6nziBiuC7BHqn
-trgLwB1tTqXiYnvenZ8w11XfCFxe/XHC/NEhGfv+bCIssNxbTyWzdLOwd5H5aImE
-UPVAGeftQOegF82EPbt1Q4pdgbuoWTtROVdAkekcXCW9SkQ98f9hbm1XQ4cM5sFE
-nJUIX1Nh5nLaO2X9MrDBWQ2MtwKBgQDLDeqTwcNq911PPQ5w4Woxclcszxaeq5kI
-mhCKI7DM/n6qGAmn9oECt5jnP2GBPFoTffbVW2KUVFnEjJWjg8u1/RISM0k0lmuE
-gXDyoGKE0H43hnQ8p9/U0CCGd/yPQKyB2afiLhplQkPWzESMkDgmsLYlNR70XLMm
-GpoH975/BwKBgH+vdddNTJCFmSgl0uWqFe9uG6KqcSLFaMU/zRAkLkJQ9XlsJ6G7
-7RUVSH2ovpZCtY3Jp3OIe7YMgR8+9ahYCjcXDDXa1LqRdRYOxLn0KhJVKM23YTbk
-NFdKXB24z1lpfCZ6jlRDRJc4axufx7Jot6Phqb6lTIeNgVlvai6SeO1hAoGBALls
-yOULUW/x2kTM5c4RGs9yscbaibZ1zzb6sdXkB8T7NiIP92lpgqA/lqK9z0WcHkmk
-gu6NGDWJ3bvOAawjY7iaFJGIQfaC0kZbihAWhEDyv//miWkGiDEnqjwBgCI1FhMx
-9sxl+3ayj46sVIDkBlLWlk7d9pmBuZs3OafDBjOrAoGAXtepX/jI4D0jWj+k27nF
-gyGesNWtWxprkLqVMlVyUmBLBpVE1d2TxM/jZyzpENb6l1ggLI3oNbPa+H50Zl6C
-5KQHL8e04gOZqA4R2YHRQLbFX/4BN7paWQFB+STSVux7oSut3+cJJxOYGhbDgMFn
-86tie7e+S+OZSHxzxeUVrUg=
 -----END CERTIFICATE-----
 )EOF";
 BearSSL::X509List caList(CA_CERT);
