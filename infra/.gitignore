@@ -3,3 +3,4 @@ mosquitto/certs/*.key
 mosquitto/certs/*.srl
 mosquitto/config/passwd
 .idea/
+docker-compose.override.yml
