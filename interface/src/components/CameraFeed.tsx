@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-const CAMERA_URL = '/camera/stream';
-const HEALTH_URL = '/camera/health';
+const CAMERA_URL = 'http://localhost:8001/camera/stream';
+const HEALTH_URL = 'http://localhost:8001/health';
 
 function CameraFeed() {
     const [cameraActive, setCameraActive] = useState(false);
