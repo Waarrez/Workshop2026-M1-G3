@@ -42,15 +42,17 @@ server {
         proxy_send_timeout 3600s;
     }
 
-    location /camera/ {
-        proxy_pass http://host.docker.internal:8001;
+location = /camera/health {
+    proxy_pass http://172.26.16.1:8001/health;
+    proxy_http_version 1.1;
+}
 
-        proxy_http_version 1.1;
-
-        proxy_buffering off;
-        proxy_cache off;
-
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-    }
+location /camera/ {
+    proxy_pass http://172.26.16.1:8001;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+}
 }
