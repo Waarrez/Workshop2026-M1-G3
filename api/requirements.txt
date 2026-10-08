@@ -4,3 +4,4 @@ psycopg[binary]
 sqlalchemy
 pyjwt
 paho-mqtt
+psycopg2-binary
