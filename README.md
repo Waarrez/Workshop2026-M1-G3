@@ -823,7 +823,6 @@ Martin RANDOUX
 Thimoté CABOTTE
 Mathis THIBAUT
 Yasmine LAAROUSSI
-...
 ```
 
 ## Contexte et utilisation
