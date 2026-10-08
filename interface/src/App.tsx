@@ -11,8 +11,9 @@ import type {
 } from './types';
 import './index.css';
 
-const API_URL = `http://${window.location.hostname}:8000`;
-const WS_URL = `ws://${window.location.hostname}:8000/ws`;
+const API_URL = '';
+const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = `${WS_PROTOCOL}//${window.location.host}/ws`;
 const MAX_READINGS = 30;
 
 function App() {
@@ -25,14 +26,21 @@ function App() {
     const [events, setEvents] = useState<Event[]>([]);
 
     useEffect(() => {
-        document.documentElement.dataset.theme = isLightTheme ? 'light' : 'dark';
-        localStorage.setItem('sentinel-theme', isLightTheme ? 'light' : 'dark');
+        document.documentElement.dataset.theme =
+            isLightTheme ? 'light' : 'dark';
+
+        localStorage.setItem(
+            'sentinel-theme',
+            isLightTheme ? 'light' : 'dark',
+        );
     }, [isLightTheme]);
 
     useEffect(() => {
         const loadHistory = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/readings?limit=${MAX_READINGS}`);
+                const response = await fetch(
+                    `${API_URL}/api/readings?limit=${MAX_READINGS}`,
+                );
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -44,14 +52,17 @@ function App() {
 
                 setDevices(
                     history.reduce<Device[]>((current, reading) => {
-                        const existingDevice = current.find((device) => device.id === reading.id);
+                        const existingDevice = current.find(
+                            (device) => device.id === reading.id,
+                        );
 
                         if (existingDevice) {
                             return current.map((device) =>
                                 device.id === reading.id
                                     ? {
                                           ...device,
-                                          last_seen: reading.received_at,
+                                          last_seen:
+                                              reading.received_at,
                                           online: true,
                                       }
                                     : device,
@@ -69,7 +80,10 @@ function App() {
                     }, []),
                 );
             } catch (error) {
-                console.error('Impossible de récupérer l’historique :', error);
+                console.error(
+                    'Impossible de récupérer l’historique :',
+                    error,
+                );
             }
         };
 
@@ -94,22 +108,33 @@ function App() {
 
             websocket.onmessage = (message) => {
                 try {
-                    const data = JSON.parse(message.data) as WebSocketMessage;
+                    const data = JSON.parse(
+                        message.data,
+                    ) as WebSocketMessage;
 
                     if (data.type === 'reading') {
                         const reading = data.payload as Reading;
 
-                        setReadings((current) => [...current, reading].slice(-MAX_READINGS));
+                        setReadings((current) =>
+                            [...current, reading].slice(
+                                -MAX_READINGS,
+                            ),
+                        );
 
                         setDevices((current) => {
-                            const existingDevice = current.find((device) => device.id === reading.id);
+                            const existingDevice =
+                                current.find(
+                                    (device) =>
+                                        device.id === reading.id,
+                                );
 
                             if (!existingDevice) {
                                 return [
                                     ...current,
                                     {
                                         id: reading.id,
-                                        last_seen: reading.received_at,
+                                        last_seen:
+                                            reading.received_at,
                                         online: true,
                                     },
                                 ];
@@ -131,10 +156,15 @@ function App() {
                     if (data.type === 'event') {
                         const event = data.payload as Event;
 
-                        setEvents((current) => [...current, event].slice(-100));
+                        setEvents((current) =>
+                            [...current, event].slice(-100),
+                        );
                     }
                 } catch (error) {
-                    console.error('Message WebSocket invalide :', error);
+                    console.error(
+                        'Message WebSocket invalide :',
+                        error,
+                    );
                 }
             };
 
@@ -147,9 +177,14 @@ function App() {
                     return;
                 }
 
-                console.info('WebSocket déconnecté. Nouvelle tentative dans 3 secondes.');
+                console.info(
+                    'WebSocket déconnecté. Nouvelle tentative dans 3 secondes.',
+                );
 
-                reconnectTimeout = window.setTimeout(connectWebSocket, 3000);
+                reconnectTimeout = window.setTimeout(
+                    connectWebSocket,
+                    3000,
+                );
             };
         };
 
@@ -179,7 +214,9 @@ function App() {
                 <section className="dashboard-section">
                     <div className="section-title">
                         <h2>Supervision</h2>
-                        <span className="live-indicator">LIVE</span>
+                        <span className="live-indicator">
+                            LIVE
+                        </span>
                     </div>
 
                     <SystemStatus
@@ -197,7 +234,9 @@ function App() {
 
                     <div className="panel environment-panel">
                         <h2>Données environnementales</h2>
-                        <EnvironmentChart readings={readings} />
+                        <EnvironmentChart
+                            readings={readings}
+                        />
                     </div>
                 </section>
             </main>

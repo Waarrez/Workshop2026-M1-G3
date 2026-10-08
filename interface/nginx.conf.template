@@ -1,0 +1,56 @@
+server {
+    listen 80;
+    server_name _;
+
+    return 301 https://$host:8443$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://api:8000;
+
+        proxy_set_header Authorization "Bearer ${SENTINEL_API_TOKEN}";
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+
+    location /ws {
+        proxy_pass http://api:8000;
+
+        proxy_set_header Authorization "Bearer ${SENTINEL_API_TOKEN}";
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade "websocket";
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location /camera/ {
+        proxy_pass http://host.docker.internal:8001;
+
+        proxy_http_version 1.1;
+
+        proxy_buffering off;
+        proxy_cache off;
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}

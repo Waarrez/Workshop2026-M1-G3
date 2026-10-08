@@ -7,8 +7,6 @@ interface SystemStatusProps {
     events: Event[];
 }
 
-const API_URL = `http://${window.location.hostname}:8000`;
-
 function SystemStatus({
     devices,
     readings,
@@ -27,7 +25,9 @@ function SystemStatus({
         latestReading?.humidity_pct,
         latestReading?.gas_raw,
         latestReading?.motion,
-    ].filter((value) => value !== null && value !== undefined).length;
+    ].filter(
+        (value) => value !== null && value !== undefined,
+    ).length;
 
     const sensorTotal = 4;
 
@@ -39,7 +39,7 @@ function SystemStatus({
         setBuzzerLoading(true);
 
         try {
-            const response = await fetch(`${API_URL}/api/commands`, {
+            const response = await fetch('/api/commands', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -56,7 +56,10 @@ function SystemStatus({
                 throw new Error(`HTTP ${response.status}`);
             }
         } catch (error) {
-            console.error('Impossible de déclencher le buzzer :', error);
+            console.error(
+                'Impossible de déclencher le buzzer :',
+                error,
+            );
         } finally {
             setBuzzerLoading(false);
         }
@@ -66,39 +69,95 @@ function SystemStatus({
         <div className="status-grid">
             <div className="status-card">
                 <span className="status-label">Edge Node</span>
-                <strong>{onlineDevices > 0 ? 'ONLINE' : 'OFFLINE'}</strong>
-                <span className={onlineDevices > 0 ? 'status-ok' : 'status-warning'}>{onlineDevices > 0 ? 'Opérationnel' : 'Hors ligne'}</span>
+                <strong>
+                    {onlineDevices > 0 ? 'ONLINE' : 'OFFLINE'}
+                </strong>
+                <span
+                    className={
+                        onlineDevices > 0
+                            ? 'status-ok'
+                            : 'status-warning'
+                    }
+                >
+                    {onlineDevices > 0
+                        ? 'Opérationnel'
+                        : 'Hors ligne'}
+                </span>
             </div>
 
             <div className="status-card">
                 <span className="status-label">Réseau</span>
-                <strong>{onlineDevices > 0 ? 'CONNECTÉ' : 'DÉCONNECTÉ'}</strong>
-                <span className={onlineDevices > 0 ? 'status-ok' : 'status-warning'}>{onlineDevices > 0 ? 'Communication active' : 'Communication interrompue'}</span>
+                <strong>
+                    {onlineDevices > 0
+                        ? 'CONNECTÉ'
+                        : 'DÉCONNECTÉ'}
+                </strong>
+                <span
+                    className={
+                        onlineDevices > 0
+                            ? 'status-ok'
+                            : 'status-warning'
+                    }
+                >
+                    {onlineDevices > 0
+                        ? 'Communication active'
+                        : 'Communication interrompue'}
+                </span>
             </div>
 
             <div className="status-card">
                 <span className="status-label">Capteurs</span>
-                <strong>{sensorCount} / {sensorTotal}</strong>
-                <span className={sensorCount === sensorTotal ? 'status-ok' : 'status-warning'}>{sensorCount === sensorTotal ? 'Tous opérationnels' : 'Vérification nécessaire'}</span>
+                <strong>
+                    {sensorCount} / {sensorTotal}
+                </strong>
+                <span
+                    className={
+                        sensorCount === sensorTotal
+                            ? 'status-ok'
+                            : 'status-warning'
+                    }
+                >
+                    {sensorCount === sensorTotal
+                        ? 'Tous opérationnels'
+                        : 'Vérification nécessaire'}
+                </span>
             </div>
 
             <div className="status-card">
                 <span className="status-label">Alertes</span>
                 <strong>{events.length}</strong>
-                <span className={events.length === 0 ? 'status-ok' : 'status-warning'}>{events.length === 0 ? 'Aucune menace' : 'Événement(s) détecté(s)'}</span>
+                <span
+                    className={
+                        events.length === 0
+                            ? 'status-ok'
+                            : 'status-warning'
+                    }
+                >
+                    {events.length === 0
+                        ? 'Aucune menace'
+                        : 'Événement(s) détecté(s)'}
+                </span>
             </div>
 
             <div className="status-card">
-                <span className="status-label">Commande</span>
-                <strong>BUZZER</strong>
+                <span className="status-label">Buzzer</span>
+
                 <button
                     type="button"
                     className="buzzer-button"
                     onClick={triggerBuzzer}
                     disabled={!latestReading || buzzerLoading}
                 >
-                    {buzzerLoading ? 'ENVOI...' : 'FAIRE SONNER'}
+                    {buzzerLoading
+                        ? 'ACTIVATION...'
+                        : 'FAIRE SONNER'}
                 </button>
+
+                <span className="status-ok">
+                    {latestReading
+                        ? 'Commande disponible'
+                        : 'Edge Node indisponible'}
+                </span>
             </div>
         </div>
     );
