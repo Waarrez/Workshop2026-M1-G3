@@ -5,11 +5,15 @@ from itertools import count
 from datetime import datetime, timezone
 from models.models import ReadingIn, CommandIn, EventIn
 from hub import Hub
-from fastapi import Query, WebSocket, WebSocketDisconnect
+from fastapi import Query, WebSocket, WebSocketDisconnect,Depends
 from typing import Optional
 from pydantic import ValidationError
 from fastapi import HTTPException
 import mqtt_bridge
+from models.db_models import ReadingDB, EventDB, CommandDB
+from database import SessionLocal
+
+hub = Hub()
 
 async def ingest(data: dict):
     print(f"[MQTT] message reçu : {data}")
@@ -21,13 +25,30 @@ async def ingest(data: dict):
     row = normalize(reading)
     READINGS.append(row)
     DEVICES[row["id"]] = row["received_at"]
+
+    db = SessionLocal()
+    try:
+        db_row = ReadingDB(
+            device_id=row["id"],
+            v=row.get("v", 1),
+            seq=row.get("seq"),
+            uptime_s=row.get("uptime_s"),
+            valid=row.get("valid", True),
+            temp_c=row.get("temp_c"),
+            humidity_pct=row.get("humidity_pct"),
+            gas_raw=row.get("gas_raw"),
+            motion=row.get("motion"),
+        )
+        db.add(db_row)
+        db.commit()
+    finally:
+        db.close()
+
     await hub.broadcast({"type": "reading", "payload": row})
 
 app = get_fastapi(on_reading=ingest)
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
-
-hub = Hub()
 
 READINGS: deque = deque(maxlen=5000)
 EVENTS: deque = deque(maxlen=1000)
@@ -63,16 +84,28 @@ async def send_command(cmd: CommandIn):
     if not ok:
         raise HTTPException(503, "Broker MQTT indisponible")
     entry = {"cmd_id": next(CMD_IDS), "created_at": now_iso(), **cmd.model_dump()}
+
+    db = SessionLocal()
+    try:
+        db_row = CommandDB(
+            device_id=cmd.device_id,
+            target=cmd.target,
+            state=cmd.state,
+            duration_ms=cmd.duration_ms,
+        )
+        db.add(db_row)
+        db.commit()
+    finally:
+        db.close()
+
     await hub.broadcast({"type": "command", "payload": entry})
     return entry
-
 
 @app.get("/api/readings")
 async def list_readings(device_id: Optional[str] = None,
                         limit: int = Query(100, ge=1, le=1000)):
     rows = [r for r in READINGS if device_id is None or r["id"] == device_id]
     return rows[-limit:]
-
 
 @app.get("/api/readings/latest")
 async def latest_readings():
@@ -81,8 +114,6 @@ async def latest_readings():
         latest[r["id"]] = r
     return list(latest.values())
 
-
-# ---------- Appareils ----------
 @app.get("/api/devices")
 async def list_devices():
     now = datetime.now(timezone.utc)
@@ -92,28 +123,31 @@ async def list_devices():
         out.append({"id": dev_id, "last_seen": last, "online": age < ONLINE_TIMEOUT_S})
     return out
 
-@app.get("/api/commands/{device_id}/pending")  # pour un ESP qui interroge en HTTP
-async def pop_pending(device_id: str):
-    queue = PENDING_CMDS[device_id]
-    out = list(queue)
-    queue.clear()
-    return out
-
-# ---------- Événements (vision, alertes) ----------
 @app.post("/api/events", status_code=201)
 async def post_event(event: EventIn):
     row = {"received_at": now_iso(), **event.model_dump()}
     EVENTS.append(row)
+
+    db = SessionLocal()
+    try:
+        db_row = EventDB(
+            type=row["type"],
+            source=row.get("source", "vision"),
+            confidence=row.get("confidence"),
+            details=row.get("details"),
+        )
+        db.add(db_row)
+        db.commit()
+    finally:
+        db.close()
+
     await hub.broadcast({"type": "event", "payload": row})
     return {"status": "ok"}
-
 
 @app.get("/api/events")
 async def list_events(limit: int = Query(100, ge=1, le=1000)):
     return list(EVENTS)[-limit:]
 
-
-# ---------- WebSocket ----------
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await hub.connect(ws)
