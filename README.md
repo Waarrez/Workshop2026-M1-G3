@@ -369,6 +369,245 @@ Le réseau dédié à la base de données PostgreSQL est :
 Le réseau de la base de données est configuré comme réseau interne et n'est pas directement accessible depuis l'extérieur de l'infrastructure Docker.
 
 
+## SENTINEL-X : API
+ 
+API de supervision du boîtier SENTINEL-X. Elle reçoit les mesures de l'ESP8266 via MQTT (TLS), les conserve, les diffuse en temps réel au dashboard par WebSocket, et relaie les commandes (buzzer, LED) du superviseur vers le boîtier.
+
+## 1. Rôle dans l'architecture
+ 
+```
+ESP8266 ──MQTTS──▶ Mosquitto ──▶ API ──┬──▶ historique (mémoire / base)
+   ▲                                   └──▶ WebSocket ──▶ Dashboard
+   └────────MQTTS◀── Mosquitto ◀── API ◀── POST /api/commands ◀── Dashboard
+ 
+Script de vision ──HTTP──▶ POST /api/events ──▶ API ──▶ WebSocket ──▶ Dashboard
+```
+ 
+- Les **mesures** arrivent par MQTT : l'API est abonnée au topic des capteurs.
+- Les **commandes** partent de l'API vers MQTT : le boîtier est abonné à son topic de commandes.
+- Les **événements de vision** arrivent en HTTP depuis le script Python de l'équipe IA.
+- Le **flux vidéo** ne passe pas par l'API : le script de vision l'expose lui-même.
+- Le **dashboard** charge l'historique en HTTP, puis reçoit le temps réel par WebSocket.
+## 2. Stack et structure du code
+ 
+- Python 3.12, FastAPI, Uvicorn
+- Pydantic (validation des données)
+- paho-mqtt 2.x (client MQTT)
+- SQLAlchemy et PostgreSQL (tables créées au démarrage ; voir limites)
+```
+api/
+├── main.py          Routes REST, WebSocket, fonction ingest()
+├── factory.py       Création de l'application et cycle de vie (démarrage MQTT)
+├── mqtt_bridge.py   Client MQTT : abonnement aux mesures, publication des commandes
+├── hub.py           Gestion des connexions WebSocket et diffusion
+├── database.py      Connexion à la base (engine, Base)
+├── models/
+│   └── models.py    Modèles Pydantic : ReadingIn, CommandIn, EventIn
+└── requirements.txt
+```
+ 
+Fonction centrale : `ingest(data: dict)` dans `main.py`. Toute mesure (MQTT ou HTTP) passe par elle : validation, normalisation, enregistrement, diffusion WebSocket.
+ 
+## 3. Configuration
+ 
+Variables d'environnement (définies dans le `docker-compose.yml`, valeurs secrètes dans le fichier `.env`, jamais dans Git) :
+ 
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `MQTT_HOST` | `mosquitto` | Nom du service broker sur le réseau Docker |
+| `MQTT_PORT` | `8883` | Port MQTT sur TLS |
+| `MQTT_USER` | `backend` | Utilisateur MQTT de l'API |
+| `MQTT_PASSWORD` | (vide) | Mot de passe de cet utilisateur |
+| `MQTT_CA` | `/certs/ca.crt` | Certificat de l'autorité qui a signé le broker |
+| `DATABASE_URL` | | URL PostgreSQL |
+ 
+Le certificat `ca.crt` doit être monté dans le conteneur, et le champ SAN du certificat serveur doit contenir `mosquitto` (nom utilisé par l'API).
+ 
+## 4. Lancement
+ 
+Avec Docker Compose (méthode normale) :
+ 
+```bash
+docker compose up -d --build api
+docker compose logs api --tail 20
+```
+ 
+Les logs doivent afficher `Application startup complete` puis `[MQTT] connecte : Success`.
+ 
+En local, sans Docker :
+ 
+```bash
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+ 
+Documentation interactive générée automatiquement : `http://localhost:8000/docs`
+ 
+> Utiliser **un seul processus** Uvicorn. Avec plusieurs workers, chacun lance un client MQTT avec le même identifiant et le broker les déconnecte en boucle.
+ 
+## 5. Flux MQTT
+ 
+| Topic | Sens | Qui publie | Qui lit |
+|---|---|---|---|
+| `sentinel/sensors/<id>` | boîtier vers API | ESP8266 | API |
+| `sentinel/commands/<id>` | API vers boîtier | API | ESP8266 |
+ 
+Exemple : `sentinel/sensors/SX-001` et `sentinel/commands/SX-001`.
+ 
+Droits (fichier `acl` du broker) :
+ 
+| Utilisateur | Écriture | Lecture |
+|---|---|---|
+| `esp8266` | `sentinel/sensors/#` | `sentinel/commands/#` |
+| `backend` (API) | `sentinel/#` | `sentinel/#` et `$SYS/#` |
+ 
+Un message publié sur un topic non autorisé est **ignoré sans erreur** : en cas de doute, activer `log_type all` dans `mosquitto.conf` et chercher `Denied PUBLISH`.
+ 
+## 6. Routes REST
+ 
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/health` | Test de santé (utilisé par la supervision) |
+| POST | `/api/readings` | Injecte une mesure en HTTP (tests) |
+| POST | `/data` | Même route, ancien nom (héritage du premier firmware) |
+| GET | `/api/readings?device_id=&limit=` | Historique des mesures (limite de 1 à 1000, 100 par défaut) |
+| GET | `/api/readings/latest` | Dernière mesure de chaque appareil |
+| GET | `/api/devices` | Appareils connus et état en ligne (dernier message de moins de 30 s) |
+| POST | `/api/commands` | Envoie un ordre au boîtier via MQTT |
+| GET | `/api/commands/{device_id}/pending` | Commandes en attente (ancien mode HTTP, inutile avec MQTT) |
+| POST | `/api/events` | Enregistre un événement (détection de présence) |
+| GET | `/api/events?limit=` | Historique des événements |
+| WS | `/ws` | Flux temps réel |
+ 
+Réponses de `POST /api/commands` :
+ 
+- `201` : commande publiée sur MQTT et diffusée
+- `503` : broker MQTT indisponible
+- `422` : corps de la requête invalide
+## 7. WebSocket
+ 
+Se connecter à `ws://<hôte>:8000/ws` (ou `wss://` si l'API est en HTTPS). L'API envoie des messages JSON de la forme `{"type": ..., "payload": ...}` :
+ 
+| `type` | Déclencheur | `payload` |
+|---|---|---|
+| `reading` | Nouvelle mesure | La mesure normalisée |
+| `command` | Commande envoyée | La commande avec `cmd_id` |
+| `event` | Événement de vision | L'événement enregistré |
+ 
+Utilisation côté dashboard :
+ 
+```js
+const history = await (await fetch("/api/readings?limit=200")).json();
+drawChart(history);
+ 
+const ws = new WebSocket(`ws://${location.hostname}:8000/ws`);
+ws.onmessage = (e) => {
+  const { type, payload } = JSON.parse(e.data);
+  if (type === "reading") addPoint(payload);
+  if (type === "event") showAlert(payload);
+};
+```
+ 
+Prévoir une reconnexion automatique (`ws.onclose`), puis un rechargement de l'historique pour combler le trou.
+ 
+## 8. Formats de données
+ 
+### Mesure (publiée par l'ESP8266 sur `sentinel/sensors/<id>`)
+ 
+```json
+{"v":1,"id":"SX-001","uptime_s":42,"seq":8,"valid":true,
+ "temp_c":23.4,"humidity_pct":51.0,"gas_raw":310,"motion":false}
+```
+ 
+| Champ | Type | Description |
+|---|---|---|
+| `id` | texte | Identifiant du boîtier (obligatoire) |
+| `v` | entier | Version du format |
+| `seq` | entier | Numéro de séquence |
+| `uptime_s` | entier | Secondes depuis le démarrage |
+| `valid` | booléen | `false` si le DHT22 n'a pas pu être lu |
+| `temp_c` | décimal | Température en °C (absent si `valid` est faux) |
+| `humidity_pct` | décimal | Humidité en % (absent si `valid` est faux) |
+| `gas_raw` | entier | MQ-2, valeur brute de 0 à 1023 (absent pendant le préchauffage) |
+| `motion` | booléen | Présence détectée par le PIR |
+ 
+L'API accepte aussi un format imbriqué (`"data": {"temp_c": ...}`), aplati par `normalize()`. Elle ajoute `received_at` (UTC).
+ 
+Un champ absent est enregistré à `null` : le front doit tester `valid` et afficher `--`, pas `0`.
+ 
+### Commande (`POST /api/commands`, relayée sur `sentinel/commands/<id>`)
+ 
+```json
+{"device_id":"SX-001","target":"buzzer","state":true,"duration_ms":2000}
+```
+ 
+- `target` : `buzzer` ou `led`
+- `state` : `true` allume, `false` éteint
+- `duration_ms` : optionnel ; si présent, l'actionneur s'éteint seul au bout de ce délai
+### Événement (`POST /api/events`)
+ 
+```json
+{"type":"person_detected","source":"vision","confidence":0.87,"details":{"bbox":[120,80,200,340]}}
+```
+ 
+## 9. Tests rapides
+ 
+Mesure vers l'API par MQTT, en jouant le rôle de l'ESP8266 :
+ 
+```bash
+docker compose exec mosquitto mosquitto_pub -h localhost -p 8883 \
+  --cafile /mosquitto/certs/ca.crt --insecure -u esp8266 -P <mot_de_passe> \
+  -t sentinel/sensors/SX-001 \
+  -m '{"id":"SX-001","temp_c":23.1,"humidity_pct":52.4}'
+ 
+curl http://localhost:8000/api/readings/latest
+```
+ 
+Commande de l'API vers le boîtier (écouter dans un autre terminal) :
+ 
+```bash
+docker compose exec mosquitto mosquitto_sub -h localhost -p 8883 \
+  --cafile /mosquitto/certs/ca.crt --insecure -u esp8266 -P <mot_de_passe> \
+  -t "sentinel/commands/#" -v
+ 
+curl -X POST http://localhost:8000/api/commands -H "Content-Type: application/json" \
+  -d '{"device_id":"SX-001","target":"buzzer","state":true,"duration_ms":2000}'
+```
+ 
+Événement de vision :
+ 
+```bash
+curl -X POST http://localhost:8000/api/events -H "Content-Type: application/json" \
+  -d '{"type":"person_detected","source":"vision","confidence":0.87}'
+```
+ 
+`--insecure` ne désactive que la vérification du nom dans le certificat (utile en local). Ne pas l'utiliser en production.
+ 
+## 10. Limites connues et améliorations
+ 
+| Sujet | État actuel | À faire |
+|---|---|---|
+| Stockage | Mesures et événements en **mémoire** (`deque`) : perdus au redémarrage | Écrire dans PostgreSQL dans `ingest` et lire dans les routes `GET` |
+| Authentification | Aucune : toute personne du réseau peut appeler `POST /api/commands` | Clé d'API ou jeton, au moins sur les routes d'écriture |
+| CORS | Ouvert à tous (`*`) | Restreindre à l'adresse du dashboard |
+| Routes HTTP de mesures | `POST /data` et `POST /api/readings` contournent l'ACL du broker | Supprimer, ou protéger par clé d'API |
+| Chiffrement HTTP | L'API est servie en HTTP | HTTPS (proxy inverse) et `wss://` ; à coordonner avec l'équipe CYBER |
+| Route `pending` | Toujours vide avec MQTT | Supprimer si MQTT reste le seul transport |
+| Détection d'anomalies | Aucune logique côté API | Exposer l'historique à l'équipe IA, ou publier leurs alertes via `/api/events` |
+ 
+## 11. Dépannage
+ 
+| Symptôme | Cause probable |
+|---|---|
+| `ModuleNotFoundError: paho` | `paho-mqtt` absent de `requirements.txt`, ou image non reconstruite (`--build`) |
+| `[MQTT] connecte : Not authorized` | `MQTT_PASSWORD` vide ou différent de celui du fichier `passwd` du broker |
+| Erreur de certificat au démarrage | Le champ SAN ne contient pas `mosquitto`, ou `ca.crt` n'est pas monté dans `/certs/ca.crt` |
+| `503 Broker MQTT indisponible` | L'API n'est pas connectée au broker : lire les logs |
+| Mesure publiée mais absente de `/api/readings/latest` | ACL qui refuse l'écriture, abonnement refusé, ou JSON rejeté (`message rejeté` dans les logs) |
+| Le broker redémarre en boucle | Fichier introuvable dans `mosquitto.conf` (par exemple `acl_file`) : lire `docker compose logs mosquitto` |
+| Mesures avec `temp_c: 0` | Capteur DHT22 défectueux ou mal câblé (trame vide) : voir le firmware |
+
+
 ## Communication avec le système central
 
 Le dashboard communique avec le système central afin de :
