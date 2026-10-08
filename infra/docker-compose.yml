@@ -37,6 +37,7 @@ services:
       MQTT_HOST: mosquitto
       MQTT_USER: backend
       MQTT_PASSWORD: ${MQTT_BACKEND_PASSWORD}
+      SENTINEL_API_TOKEN: ${SENTINEL_API_TOKEN}
     depends_on:
       db:
         condition: service_healthy
@@ -74,6 +75,15 @@ services:
     restart: unless-stopped
     ports:
       - "8081:80"
+      - "8443:443"
+    environment:
+      SENTINEL_API_TOKEN: ${SENTINEL_API_TOKEN}
+    volumes:
+      - ../interface/certs:/etc/nginx/certs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - api
     networks: [default]
 
   grafana:

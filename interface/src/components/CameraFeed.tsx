@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-const CAMERA_URL = `http://${window.location.hostname}:8001/camera/stream`;
-const HEALTH_URL = `http://${window.location.hostname}:8001/health`;
+const CAMERA_URL = '/camera/stream';
+const HEALTH_URL = '/camera/health';
 
 function CameraFeed() {
     const [cameraActive, setCameraActive] = useState(false);
@@ -26,7 +26,10 @@ function CameraFeed() {
 
         checkCamera();
 
-        const interval = window.setInterval(checkCamera, 3000);
+        const interval = window.setInterval(
+            checkCamera,
+            3000,
+        );
 
         return () => window.clearInterval(interval);
     }, []);
@@ -50,7 +53,9 @@ function CameraFeed() {
 
             <div className="camera-status">
                 <span className="status-dot" />
-                {cameraActive ? 'CAMÉRA ACTIVE' : 'CAMÉRA INACTIVE'}
+                {cameraActive
+                    ? 'CAMÉRA ACTIVE'
+                    : 'CAMÉRA INACTIVE'}
             </div>
         </div>
     );

@@ -12,8 +12,18 @@ from fastapi import HTTPException
 import mqtt_bridge
 from models.db_models import ReadingDB, EventDB, CommandDB
 from database import SessionLocal
+import os
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends
 
 hub = Hub()
+
+security = HTTPBearer()
+API_TOKEN = os.getenv("SENTINEL_API_TOKEN")
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> None:
+    if not API_TOKEN or credentials.credentials != API_TOKEN:
+        raise HTTPException(status_code=401, detail="Token invalide")
 
 async def ingest(data: dict):
     print(f"[MQTT] message reçu : {data}")
@@ -77,7 +87,7 @@ async def post_reading(reading: ReadingIn):
     await ingest(reading.model_dump())
     return {"status": "ok"}
 
-@app.post("/api/commands", status_code=201)
+@app.post("/api/commands", status_code=201, dependencies=[Depends(verify_token)])
 async def send_command(cmd: CommandIn):
     ok = mqtt_bridge.publish_command(cmd.device_id, {
         "target": cmd.target, "state": cmd.state, "duration_ms": cmd.duration_ms})
@@ -103,18 +113,19 @@ async def send_command(cmd: CommandIn):
 
 @app.get("/api/readings")
 async def list_readings(device_id: Optional[str] = None,
-                        limit: int = Query(100, ge=1, le=1000)):
+                        limit: int = Query(100, ge=1, le=1000),
+                        dependencies=[Depends(verify_token)]):
     rows = [r for r in READINGS if device_id is None or r["id"] == device_id]
     return rows[-limit:]
 
-@app.get("/api/readings/latest")
+@app.get("/api/readings/latest", dependencies=[Depends(verify_token)])
 async def latest_readings():
     latest = {}
     for r in READINGS:
         latest[r["id"]] = r
     return list(latest.values())
 
-@app.get("/api/devices")
+@app.get("/api/devices", dependencies=[Depends(verify_token)])
 async def list_devices():
     now = datetime.now(timezone.utc)
     out = []
@@ -123,7 +134,7 @@ async def list_devices():
         out.append({"id": dev_id, "last_seen": last, "online": age < ONLINE_TIMEOUT_S})
     return out
 
-@app.post("/api/events", status_code=201)
+@app.post("/api/events", status_code=201, dependencies=[Depends(verify_token)])
 async def post_event(event: EventIn):
     row = {"received_at": now_iso(), **event.model_dump()}
     EVENTS.append(row)
@@ -144,7 +155,7 @@ async def post_event(event: EventIn):
     await hub.broadcast({"type": "event", "payload": row})
     return {"status": "ok"}
 
-@app.get("/api/events")
+@app.get("/api/events", dependencies=[Depends(verify_token)])
 async def list_events(limit: int = Query(100, ge=1, le=1000)):
     return list(EVENTS)[-limit:]
 
