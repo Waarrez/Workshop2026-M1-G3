@@ -1,61 +1,83 @@
+
 import { useEffect, useState } from 'react';
 
-const CAMERA_URL = 'http://localhost:8001/camera/stream';
-const HEALTH_URL = 'http://localhost:8001/health';
+const CAMERA_URL = '/camera/stream';
+const HEALTH_URL = '/camera/health';
 
 function CameraFeed() {
-    const [cameraActive, setCameraActive] = useState(false);
+    const [serviceAvailable, setServiceAvailable] = useState(false);
+    const [streamActive, setStreamActive] = useState(false);
 
     useEffect(() => {
+        let cancelled = false;
+
         const checkCamera = async () => {
             try {
-                const response = await fetch(HEALTH_URL);
+                const response = await fetch(HEALTH_URL, {
+                    cache: 'no-store',
+                });
 
                 if (!response.ok) {
-                    setCameraActive(false);
+                    if (!cancelled) {
+                        setServiceAvailable(false);
+                        setStreamActive(false);
+                    }
+
                     return;
                 }
 
-                const data = await response.json();
-
-                setCameraActive(data.camera_open === true);
+                if (!cancelled) {
+                    setServiceAvailable(true);
+                }
             } catch {
-                setCameraActive(false);
+                if (!cancelled) {
+                    setServiceAvailable(false);
+                    setStreamActive(false);
+                }
             }
         };
 
-        checkCamera();
+        void checkCamera();
 
-        const interval = window.setInterval(
-            checkCamera,
-            3000,
-        );
+        const interval = window.setInterval(() => {
+            void checkCamera();
+        }, 3000);
 
-        return () => window.clearInterval(interval);
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+        };
     }, []);
 
     return (
         <div className="camera-feed">
-            {cameraActive ? (
+            {serviceAvailable ? (
                 <img
                     src={CAMERA_URL}
                     className="camera-video"
                     alt="Flux vidéo de la webcam USB"
-                    onError={() => setCameraActive(false)}
+                    onLoad={() => setStreamActive(true)}
+                    onError={() => setStreamActive(false)}
                 />
             ) : (
                 <div className="camera-placeholder">
                     <div className="camera-icon">CAM</div>
                     <span>CAMÉRA INACTIVE</span>
-                    <small>Webcam indisponible</small>
+                    <small>Serveur vidéo indisponible</small>
                 </div>
             )}
 
             <div className="camera-status">
-                <span className="status-dot" />
-                {cameraActive
+                <span
+                    className={`status-dot ${
+                        streamActive ? 'status-ok' : 'status-warning'
+                    }`}
+                />
+                {streamActive
                     ? 'CAMÉRA ACTIVE'
-                    : 'CAMÉRA INACTIVE'}
+                    : serviceAvailable
+                      ? 'FLUX VIDÉO INDISPONIBLE'
+                      : 'CAMÉRA INACTIVE'}
             </div>
         </div>
     );

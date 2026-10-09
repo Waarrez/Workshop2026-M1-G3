@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import CameraFeed from './components/CameraFeed';
 import EnvironmentChart from './components/EnvironmentChart';
@@ -12,9 +13,11 @@ import type {
 import './index.css';
 
 const API_URL = '';
-const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_PROTOCOL =
+    window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const WS_URL = `${WS_PROTOCOL}//${window.location.host}/ws`;
 const MAX_READINGS = 30;
+const MAX_EVENTS = 100;
 
 function App() {
     const [isLightTheme, setIsLightTheme] = useState(() => {
@@ -36,17 +39,32 @@ function App() {
     }, [isLightTheme]);
 
     useEffect(() => {
+        let cancelled = false;
+
         const loadHistory = async () => {
             try {
-                const response = await fetch(
-                    `${API_URL}/api/readings?limit=${MAX_READINGS}`,
-                );
+                const [readingsResponse, eventsResponse] =
+                    await Promise.all([
+                        fetch(
+                            `${API_URL}/api/readings?limit=${MAX_READINGS}`,
+                        ),
+                        fetch(
+                            `${API_URL}/api/events?limit=${MAX_EVENTS}`,
+                        ),
+                    ]);
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                if (!readingsResponse.ok) {
+                    throw new Error(
+                        `Historique des mesures : HTTP ${readingsResponse.status}`,
+                    );
                 }
 
-                const history = (await response.json()) as Reading[];
+                const history =
+                    (await readingsResponse.json()) as Reading[];
+
+                if (cancelled) {
+                    return;
+                }
 
                 setReadings(history.slice(-MAX_READINGS));
 
@@ -61,8 +79,7 @@ function App() {
                                 device.id === reading.id
                                     ? {
                                           ...device,
-                                          last_seen:
-                                              reading.received_at,
+                                          last_seen: reading.received_at,
                                           online: true,
                                       }
                                     : device,
@@ -79,15 +96,35 @@ function App() {
                         ];
                     }, []),
                 );
+
+                if (eventsResponse.ok) {
+                    const historyEvents =
+                        (await eventsResponse.json()) as Event[];
+
+                    if (!cancelled) {
+                        setEvents(historyEvents.slice(-MAX_EVENTS));
+                    }
+                } else {
+                    console.error(
+                        'Impossible de récupérer l’historique des événements :',
+                        `HTTP ${eventsResponse.status}`,
+                    );
+                }
             } catch (error) {
-                console.error(
-                    'Impossible de récupérer l’historique :',
-                    error,
-                );
+                if (!cancelled) {
+                    console.error(
+                        'Impossible de récupérer les données initiales :',
+                        error,
+                    );
+                }
             }
         };
 
-        loadHistory();
+        void loadHistory();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     useEffect(() => {
@@ -116,25 +153,20 @@ function App() {
                         const reading = data.payload as Reading;
 
                         setReadings((current) =>
-                            [...current, reading].slice(
-                                -MAX_READINGS,
-                            ),
+                            [...current, reading].slice(-MAX_READINGS),
                         );
 
                         setDevices((current) => {
-                            const existingDevice =
-                                current.find(
-                                    (device) =>
-                                        device.id === reading.id,
-                                );
+                            const existingDevice = current.find(
+                                (device) => device.id === reading.id,
+                            );
 
                             if (!existingDevice) {
                                 return [
                                     ...current,
                                     {
                                         id: reading.id,
-                                        last_seen:
-                                            reading.received_at,
+                                        last_seen: reading.received_at,
                                         online: true,
                                     },
                                 ];
@@ -144,8 +176,7 @@ function App() {
                                 device.id === reading.id
                                     ? {
                                           ...device,
-                                          last_seen:
-                                              reading.received_at,
+                                          last_seen: reading.received_at,
                                           online: true,
                                       }
                                     : device,
@@ -157,7 +188,7 @@ function App() {
                         const event = data.payload as Event;
 
                         setEvents((current) =>
-                            [...current, event].slice(-100),
+                            [...current, event].slice(-MAX_EVENTS),
                         );
                     }
                 } catch (error) {
@@ -214,9 +245,7 @@ function App() {
                 <section className="dashboard-section">
                     <div className="section-title">
                         <h2>Supervision</h2>
-                        <span className="live-indicator">
-                            LIVE
-                        </span>
+                        <span className="live-indicator">LIVE</span>
                     </div>
 
                     <SystemStatus
@@ -234,9 +263,7 @@ function App() {
 
                     <div className="panel environment-panel">
                         <h2>Données environnementales</h2>
-                        <EnvironmentChart
-                            readings={readings}
-                        />
+                        <EnvironmentChart readings={readings} />
                     </div>
                 </section>
             </main>
